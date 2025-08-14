@@ -4,16 +4,64 @@ const Product = require("../models/product");
 const auth = require("../middleware/auth");
 
 const router = express.Router();
-
-// GET all products
+/// GET /products
 router.get("/", async (req, res, next) => {
   try {
-    const products = await Product.find();
-    res.json({ data: products });
+    let page = req.query.page ? parseInt(req.query.page, 10) : null;
+    let limit = req.query.limit ? parseInt(req.query.limit, 10) : null;
+
+    // If limit is not given → return ALL products
+    if (!limit) {
+      const allProducts = await Product.find()
+        .sort({ createdAt: -1 })
+        .select("_id name price");
+
+      const formattedProducts = allProducts.map(p => ({
+        id: p._id,
+        name: p.name,
+        price: p.price
+      }));
+
+      return res.json({
+        page: 1,
+        limit: formattedProducts.length,
+        totalProducts: formattedProducts.length,
+        totalPages: 1,
+        products: formattedProducts
+      });
+    }
+
+    // If limit is given → use pagination
+    if (!page || page < 1) page = 1;
+    const totalProducts = await Product.countDocuments();
+    const skip = (page - 1) * limit;
+
+    const products = await Product.find()
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .select("_id name price");
+
+    const formattedProducts = products.map(p => ({
+      id: p._id,
+      name: p.name,
+      price: p.price
+    }));
+
+    res.json({
+      page,
+      limit,
+      totalProducts,
+      totalPages: Math.ceil(totalProducts / limit),
+      products: formattedProducts
+    });
   } catch (err) {
     next(err);
   }
 });
+
+
+
 
 // GET product by id
 router.get("/:id", async (req, res, next) => {
